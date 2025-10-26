@@ -129,5 +129,3 @@ Please respond as Ashley, the AI assistant. Be helpful, professional, and addres
     except Exception as e:
         print(f"Error calling OpenRouter API: {e}")
         return None
-
-

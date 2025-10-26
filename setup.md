@@ -62,7 +62,7 @@ If you want alarm functionality:
 ### 6. Run the Assistant
 ```bash
 # Using the updated main file
-python AI_main.py
+python trial_main.py
 
 # Or test the alarm system
 python alarm.py

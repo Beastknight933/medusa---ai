@@ -1,145 +1,91 @@
-import pyautogui
-import webbrowser
-import re
+import os
 import shutil
-import difflib
-import spacy
-from time import sleep
-from tts import speak, cleanup
+import logging
 
-# Load spaCy NLP model
-nlp = spacy.load("en_core_web_sm")
+logger = logging.getLogger(__name__)
 
-# Core application dictionary
+# Core application dictionary mapping common names to executable names
 basic_app_dict = {
     "commandprompt": "cmd",
+    "cmd": "cmd",
     "paint": "paint",
     "word": "winword",
     "excel": "excel",
     "chrome": "chrome",
     "vscode": "code",
-    "powerpoint": "powerpnt"
+    "code": "code",
+    "powerpoint": "powerpnt",
+    "notepad": "notepad",
+    "spotify": "spotify",
 }
 
-synonym_dict = {
-    "document editor": "word",
-    "spreadsheet": "excel",
-    "browser": "chrome",
-    "code editor": "vscode",
-    "presentation": "powerpoint",
-    "terminal": "commandprompt"
-}
+def openappweb(target: str) -> bool:
+    """
+    Attempts to open a local application or website based on the target string provided by n8n.
+    Returns True if successful, False otherwise.
+    """
+    if not target:
+        logger.warning("No target provided to open.")
+        return False
+        
+    target = target.lower().strip()
+    logger.info(f"Attempting to open: {target}")
 
-# Context memory
-context = {
-    "last_action": None,
-    "last_app": None,
-    "last_type": None  # "app" or "web"
-}
+    # Check if it's a website
+    if target.startswith("http") or target.startswith("www."):
+        import webbrowser
+        if not target.startswith("http"):
+            target = f"https://{target}"
+        webbrowser.open(target)
+        return True
 
+    # Check dictionary mapping
+    if target in basic_app_dict:
+        exe = basic_app_dict[target]
+        logger.info(f"Found {target} in dict, launching {exe}")
+        os.system(f"start {exe}")
+        return True
 
-def fuzzy_match_app_name(query):
-    words = query.lower().split()
-    possible_apps = list(basic_app_dict.keys()) + list(synonym_dict.keys())
-    match = difflib.get_close_matches(" ".join(words), possible_apps, n=1, cutoff=0.5)
-    if match:
-        matched_key = match[0]
-        return synonym_dict.get(matched_key, matched_key)
-    return None
+    # Fallback: check if executable exists in PATH
+    if shutil.which(target):
+        logger.info(f"Found {target} in PATH, launching")
+        os.system(f"start {target}")
+        return True
 
-def detect_intent(query):
-    doc = nlp(query.lower())
-    intent = None
-    app_name = None
-
-    for token in doc:
-        if token.lemma_ in ["open", "launch", "start", "run"]:
-            intent = "open"
-        elif token.lemma_ in ["close", "kill", "terminate", "exit", "stop"]:
-            intent = "close"
-
-    # Try to extract application name or web domain
-    url_match = re.search(r"(?:\bwww\.|\b)([\w-]+(?:\.[\w]+)+)", query)
-    if url_match:
-        app_name = url_match.group(1)
-        return intent, app_name, "web"
-
-    app_name = fuzzy_match_app_name(query)
-    if not app_name:
-        # Try by executable name
-        for token in doc:
-            if shutil.which(token.text):
-                app_name = token.text
-                break
-
-    if app_name:
-        return intent, app_name, "app"
+    # Last resort: just try to start it, Windows might resolve it
+    logger.info(f"Target {target} not explicitly found, attempting generic start")
+    # Using 'start "" "target"' to avoid issues with spaces or command prompt hijacking
+    result = os.system(f'start "" "{target}"')
     
-    return intent, None, None
-
-def openappweb(query=None):
-    if not query:
-        speak("No command provided.")
-        return
-
-    intent, app_name, entity_type = detect_intent(query)
-    if intent != "open" or not app_name:
-        speak("Sorry, I couldn't figure out what to open.")
-        return
-
-    speak("Launching, sir")
-    context.update({"last_action": "open", "last_app": app_name, "last_type": entity_type})
-
-    if entity_type == "web":
-        if not app_name.startswith("http"):
-            app_name = f"https://www.{app_name}"
-        webbrowser.open(app_name)
-        return
-
-    if app_name in basic_app_dict:
-        os.system(f"start {basic_app_dict[app_name]}")
-        return
-
-    if shutil.which(app_name):
-        os.system(f"start {app_name}")
-        return
-
-    speak("Sorry, I couldn't find that application.")
-
-def closeappweb(query=None):
-    if not query:
-        speak("No command provided.")
-        return
-
-    intent, app_name, entity_type = detect_intent(query)
-
-    # Use context if no app name
-    if not app_name:
-        app_name = context.get("last_app")
-        entity_type = context.get("last_type")
-
-    if intent != "close" or not app_name:
-        speak("Sorry, I couldn't figure out what to close.")
-        return
-
-    speak("Closing, sir")
-    context.update({"last_action": "close", "last_app": app_name, "last_type": entity_type})
-
-    if "tab" in query:
-        match = re.search(r"(\d+)\s*tab", query)
-        count = int(match.group(1)) if match else 1
-        for _ in range(count):
-            pyautogui.hotkey("ctrl", "w")
-            sleep(0.5)
-        speak("Tab closed" if count == 1 else "All tabs closed")
-        return
-
-    if entity_type == "app":
-        exe_name = basic_app_dict.get(app_name, app_name)
-        os.system(f"taskkill /f /im {exe_name}.exe")
+    if result == 0:
+        return True
     else:
-        pyautogui.hotkey("ctrl", "w")
-        speak("Web tab closed")
+        logger.error(f"Failed to open {target}")
+        return False
 
-def cleanup_dictapp():
-    cleanup()
+def closeappweb(target: str) -> bool:
+    """
+    Attempts to close a local application based on the target string provided by n8n.
+    Returns True if successful, False otherwise.
+    """
+    if not target:
+        logger.warning("No target provided to close.")
+        return False
+
+    target = target.lower().strip()
+    logger.info(f"Attempting to close: {target}")
+
+    exe_name = basic_app_dict.get(target, target)
+    
+    # taskkill requires .exe extension usually
+    if not exe_name.endswith(".exe"):
+        exe_name += ".exe"
+
+    result = os.system(f"taskkill /f /im {exe_name}")
+    
+    if result == 0:
+        logger.info(f"Successfully closed {exe_name}")
+        return True
+    else:
+        logger.error(f"Failed to close {exe_name}")
+        return False

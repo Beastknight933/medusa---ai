@@ -1,0 +1,154 @@
+{
+  "name": "Medusa AI - JARVIS Brain (Starter)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "assistant",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "webhookId": "medusa-assistant-webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.text }}",
+        "options": {
+          "systemMessage": "You are J.A.R.V.I.S., a highly advanced AI assistant. You must respond to the user's prompt.\n\nCRITICAL: You MUST format your final response strictly as a JSON object with exactly three keys: \"speech\" (what you want to say out loud), \"action\" (a local command to run, e.g. \"open_app\" or \"close_app\", or null if none), and \"target\" (the app name, e.g. \"chrome\" or null).\n\nExample Output:\n{\n  \"speech\": \"Right away, sir. Opening Chrome.\",\n  \"action\": \"open_app\",\n  \"target\": \"chrome\"\n}"
+        }
+      },
+      "id": "ai-agent-node",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "llm-placeholder-node",
+      "name": "LLM Provider (Placeholder)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [
+        500,
+        500
+      ],
+      "notesInFlow": true,
+      "notes": "Add your Credentials Here! You can delete this node and use Groq, Anthropic, or Ollama instead."
+    },
+    {
+      "parameters": {},
+      "id": "memory-node",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [
+        650,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "name": "calculator",
+        "description": "Useful for when you need to answer questions about math."
+      },
+      "id": "tool-placeholder-node",
+      "name": "Calculator Tool (Example)",
+      "type": "@n8n/n8n-nodes-langchain.toolCalculator",
+      "typeVersion": 1,
+      "position": [
+        800,
+        500
+      ],
+      "notesInFlow": true,
+      "notes": "Attach more custom tools here (Weather, Calendar, etc.)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Provider (Placeholder)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculator Tool (Example)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
